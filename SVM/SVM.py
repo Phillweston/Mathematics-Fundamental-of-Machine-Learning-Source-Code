@@ -1,79 +1,171 @@
 from numpy import * 
 
-def loadDataSet(filename): #读取数据
-    dataMat=[]
-    labelMat=[]
-    fr=open(filename)
-    for line in fr.readlines():
-        lineArr=line.strip().split('\t')
-        dataMat.append([float(lineArr[0]),float(lineArr[1])])
-        labelMat.append(float(lineArr[2]))
-    return dataMat,labelMat #返回数据特征和数据类别
+def loadDataSet(filename):
+    """
+    Load the dataset from the given file.
 
-def selectJrand(i,m): #在0-m中随机选择一个不是i的整数
-    j=i
-    while (j==i):
-        j=int(random.uniform(0,m))
+    Parameters:
+    filename (str): The path to the file containing the dataset.
+
+    Returns:
+    dataMat (list): A list of lists representing the data features.
+    labelMat (list): A list of labels corresponding to each data point.
+    """
+    dataMat = []
+    labelMat = []
+    fr = open(filename)
+    for line in fr.readlines():
+        lineArr = line.strip().split('\t')
+        dataMat.append([float(lineArr[0]), float(lineArr[1])])
+        labelMat.append(float(lineArr[2]))
+    return dataMat, labelMat
+
+def selectJrand(i, m):
+    """
+    Randomly selects an integer between 0 and m (exclusive) that is not equal to i.
+
+    Parameters:
+    i (int): The integer to exclude from the selection.
+    m (int): The upper bound (exclusive) for the random selection.
+
+    Returns:
+    int: The randomly selected integer.
+
+    """
+    j = i
+    while j == i:
+        j = int(random.uniform(0, m))
     return j
 
-def clipAlpha(aj,H,L):  #保证a在L和H范围内（L <= a <= H）
-    if aj>H:
-        aj=H
-    if L>aj:
-        aj=L
+def clipAlpha(aj, H, L):
+    """
+    Clips the value of `aj` to ensure it is within the range [L, H].
+
+    Parameters:
+    aj (float): The value to be clipped.
+    H (float): The upper bound of the range.
+    L (float): The lower bound of the range.
+
+    Returns:
+    float: The clipped value of `aj`.
+    """
+    if aj > H:
+        aj = H
+    if L > aj:
+        aj = L
     return aj
 
-#核函数，输入参数,X:支持向量的特征树；A：某一行特征数据；kTup：('lin',k1)核函数的类型和参数
 def kernelTrans(X, A, kTup): 
-    m,n = shape(X)
+    """
+    Transforms the input data using a specified kernel function.
+
+    Parameters:
+    X (matrix): The feature matrix of support vectors.
+    A (matrix): The row of feature data to be transformed.
+    kTup (tuple): A tuple specifying the kernel type and its parameters.
+
+    Returns:
+    K (matrix): The transformed matrix.
+
+    Raises:
+    NameError: If the specified kernel type is not recognized.
+    """
+
+    m, n = shape(X)
     K = mat(zeros((m,1)))
-    if kTup[0]=='lin': #线性函数
+    if kTup[0] == 'lin': # Linear function
         K = X * A.T
-    elif kTup[0]=='rbf': # 径向基函数(radial bias function)
+    elif kTup[0] == 'rbf': # Radial basis function
         for j in range(m):
             deltaRow = X[j,:] - A
-            K[j] = deltaRow*deltaRow.T
-        K = exp(K/(-1*kTup[1]**2)) #返回生成的结果
+            K[j] = deltaRow * deltaRow.T
+        K = exp(K / (-1 * kTup[1]**2)) # Return the generated result
     else:
         raise NameError('Houston We Have a Problem -- That Kernel is not recognized')
     return K
 
 
-#定义类，方便存储数据
 class optStruct:
-    def __init__(self,dataMatIn, classLabels, C, toler, kTup):  # 存储各类参数
-        self.X = dataMatIn  #数据特征
-        self.labelMat = classLabels #数据类别
-        self.C = C #软间隔参数C，参数越大，非线性拟合能力越强
-        self.tol = toler #停止阀值
-        self.m = shape(dataMatIn)[0] #数据行数
+    """
+    A class that represents the optimization structure for SVM.
+
+    Attributes:
+        X (ndarray): The data features.
+        labelMat (ndarray): The data class labels.
+        C (float): The soft margin parameter C. A larger value allows for stronger non-linear fitting.
+        tol (float): The stopping threshold.
+        m (int): The number of data rows.
+        alphas (ndarray): The Lagrange multipliers.
+        b (float): The initial bias.
+        eCache (ndarray): The cache for storing errors.
+        K (ndarray): The computed kernel matrix.
+    """
+
+    def __init__(self, dataMatIn, classLabels, C, toler, kTup):
+        """
+        Initialize the optStruct object.
+
+        Args:
+            dataMatIn (ndarray): The data features.
+            classLabels (ndarray): The data class labels.
+            C (float): The soft margin parameter C. A larger value allows for stronger non-linear fitting.
+            toler (float): The stopping threshold.
+            kTup (tuple): The kernel function parameters.
+        """
+        self.X = dataMatIn  # Data features
+        self.labelMat = classLabels # Data categories
+        self.C = C # Soft margin parameter C, the larger the parameter, the stronger the non-linear fitting ability
+        self.tol = toler # Stopping threshold
+        self.m = shape(dataMatIn)[0] # Number of rows in the data
         self.alphas = mat(zeros((self.m,1)))
-        self.b = 0 #初始设为0
-        self.eCache = mat(zeros((self.m,2))) #缓存
-        self.K = mat(zeros((self.m,self.m))) #核函数的计算结果
+        self.b = 0 # Initially set to 0
+        self.eCache = mat(zeros((self.m,2))) # Cache
+        self.K = mat(zeros((self.m,self.m))) # The calculation result of the kernel function
         for i in range(self.m):
             self.K[:,i] = kernelTrans(self.X, self.X[i,:], kTup)
 
 
-def calcEk(oS, k): #计算 Ek
+def calcEk(oS, k):
+    """
+    Calculate the error (Ek) for a given data point (k).
+
+    Parameters:
+    oS (object): The SVM object containing the necessary data.
+    k (int): The index of the data point.
+
+    Returns:
+    float: The calculated error (Ek).
+    """
     fXk = float(multiply(oS.alphas,oS.labelMat).T*oS.K[:,k] + oS.b)
     Ek = fXk - float(oS.labelMat[k])
     return Ek
 
-#随机选取aj，并返回其E值
 def selectJ(i, oS, Ei):
+    """
+    Selects the second alpha (aj) for the optimization process in the SMO algorithm.
+    This function will randomly select aj and return its E value.
+
+    Parameters:
+    i (int): The index of the first alpha (ai) in the alpha vector.
+    oS (object): The SVM optimization object containing necessary data.
+    Ei (float): The error of the first alpha (ai).
+
+    Returns:
+    int: The index of the second alpha (aj) in the alpha vector.
+    float: The error of the second alpha (aj).
+    """
     maxK = -1
     maxDeltaE = 0
     Ej = 0
     oS.eCache[i] = [1,Ei]
-    validEcacheList = nonzero(oS.eCache[:,0].A)[0]  #返回矩阵中的非零位置的行数
+    validEcacheList = nonzero(oS.eCache[:,0].A)[0]  # Returns the row numbers of non-zero positions in the matrix
     if (len(validEcacheList)) > 1:
         for k in validEcacheList:
             if k == i:
                 continue
             Ek = calcEk(oS, k)
             deltaE = abs(Ei - Ek)
-            if (deltaE > maxDeltaE): #返回步长最大的aj
+            if (deltaE > maxDeltaE): # Return aj with the largest step size
                 maxK = k
                 maxDeltaE = deltaE
                 Ej = Ek
@@ -84,19 +176,39 @@ def selectJ(i, oS, Ei):
     return j, Ej
 
 
-def updateEk(oS, k): #更新os数据
-    Ek = calcEk(oS, k)
-    oS.eCache[k] = [1,Ek]
+def updateEk(oS, k):
+    """
+    Update the error cache for a given data point.
 
-#首先检验ai是否满足KKT条件，如果不满足，随机选择aj进行优化，更新ai,aj,b值
-def innerL(i, oS): #输入参数i和所有参数数据
-    Ei = calcEk(oS, i) #计算E值
-    if ((oS.labelMat[i]*Ei < -oS.tol) and (oS.alphas[i] < oS.C)) or ((oS.labelMat[i]*Ei > oS.tol) and (oS.alphas[i] > 0)): 
-    #检验这行数据是否符合KKT条件
-        j,Ej = selectJ(i, oS, Ei) #随机选取aj，并返回其E值
+    Parameters:
+    oS (object): The SVM object containing the data and parameters.
+    k (int): The index of the data point to update.
+
+    Returns:
+    None
+    """
+    Ek = calcEk(oS, k)
+    oS.eCache[k] = [1, Ek]
+
+def innerL(i, oS):
+    """
+    Performs the inner loop of the Sequential Minimal Optimization (SMO) algorithm for training a Support Vector Machine (SVM).
+    This function will firstly check whether ai meets the KKT conditions. If not, randomly select aj for optimization, update ai, aj, and b values
+
+    Parameters:
+    i (int): The index of the first alpha parameter to optimize.
+    oS (object): The object containing all the necessary data and parameters for the SVM training.
+
+    Returns:
+    int: Returns 1 if the alpha parameters were updated, 0 otherwise.
+    """
+    Ei = calcEk(oS, i)
+    if ((oS.labelMat[i]*Ei < -oS.tol) and (oS.alphas[i] < oS.C)) or ((oS.labelMat[i]*Ei > oS.tol) and (oS.alphas[i] > 0)):
+        # Check whether this row of data meets the KKT conditions
+        j,Ej = selectJ(i, oS, Ei) # Randomly select aj, and return its E value
         alphaIold = oS.alphas[i].copy()
         alphaJold = oS.alphas[j].copy()
-        if (oS.labelMat[i] != oS.labelMat[j]): 
+        if (oS.labelMat[i] != oS.labelMat[j]):
             L = max(0, oS.alphas[j] - oS.alphas[i])
             H = min(oS.C, oS.C + oS.alphas[j] - oS.alphas[i])
         else:
@@ -109,17 +221,17 @@ def innerL(i, oS): #输入参数i和所有参数数据
         if eta >= 0:
             print("eta>=0")
             return 0
-        oS.alphas[j] -= oS.labelMat[j]*(Ei - Ej)/eta 
-        oS.alphas[j] = clipAlpha(oS.alphas[j],H,L) 
+        oS.alphas[j] -= oS.labelMat[j]*(Ei - Ej)/eta
+        oS.alphas[j] = clipAlpha(oS.alphas[j],H,L)
         updateEk(oS, j)
-        if (abs(oS.alphas[j] - alphaJold) < oS.tol): #alpha变化大小阀值（自己设定）
+        if (abs(oS.alphas[j] - alphaJold) < oS.tol): # Threshold for alpha change size (set by yourself)
             print("j not moving enough")
             return 0
         oS.alphas[i] += oS.labelMat[j]*oS.labelMat[i]*(alphaJold - oS.alphas[j])
-        updateEk(oS, i) #更新数据
-        #以下是求解b的过程
+        updateEk(oS, i) # Update data
+        # The following is the process of solving b
         b1 = oS.b - Ei- oS.labelMat[i]*(oS.alphas[i]-alphaIold)*oS.K[i,i] - oS.labelMat[j]*(oS.alphas[j]-alphaJold)*oS.K[i,j]
-        b2 = oS.b - Ej- oS.labelMat[i]*(oS.alphas[i]-alphaIold)*oS.K[i,j]- oS.labelMat[j]*(oS.alphas[j]-alphaJold)*oS.K[j,j]
+        b2 = oS.b - Ej- oS.labelMat[i]*(oS.alphas[i]-alphaIold)*oS.K[i,j] - oS.labelMat[j]*(oS.alphas[j]-alphaJold)*oS.K[j,j]
         if (0 < oS.alphas[i]<oS.C):
             oS.b = b1
         elif (0 < oS.alphas[j]<oS.C):
@@ -131,99 +243,133 @@ def innerL(i, oS): #输入参数i和所有参数数据
         return 0
 
 
-#SMO函数，用于快速求解出alpha
-def smoP(dataMatIn, classLabels, C, toler, maxIter,kTup=('lin', 0)): 
-#输入参数：数据特征，数据类别，参数C，阈值toler，最大迭代次数，核函数（默认线性核）
-    oS = optStruct(mat(dataMatIn),mat(classLabels).transpose(),C,toler, kTup)
+def smoP(dataMatIn, classLabels, C, toler, maxIter, kTup=('lin', 0)): 
+    """
+    Implements the simplified SMO algorithm for training a support vector machine (SVM).
+    This function is used to solve the `alpha` values in the SVM model.
+
+    Args:
+        dataMatIn (numpy.ndarray): The input data matrix of shape (m, n), where m is the number of samples and n is the number of features.
+        classLabels (numpy.ndarray): The class labels of the input data, of shape (m, 1).
+        C (float): The regularization parameter.
+        toler (float): The tolerance threshold.
+        maxIter (int): The maximum number of iterations.
+        kTup (tuple, optional): The kernel function type and parameters. Defaults to ('lin', 0) for linear kernel.
+
+    Returns:
+        float: The bias term (b) of the SVM.
+        numpy.ndarray: The Lagrange multipliers (alphas) of the SVM.
+
+    """
+    oS = optStruct(mat(dataMatIn), mat(classLabels).transpose(), C, toler, kTup)
     iter = 0
     entireSet = True
     alphaPairsChanged = 0
     while (iter < maxIter) and ((alphaPairsChanged > 0) or (entireSet)):
         alphaPairsChanged = 0
         if entireSet:
-            for i in range(oS.m): #遍历所有数据
-                alphaPairsChanged += innerL(i,oS)
-                print("fullSet, iter: %d i:%d, pairs changed %d" % (iter,i,alphaPairsChanged)) 
-                #显示第多少次迭代，那行特征数据使alpha发生了改变，这次改变了多少次alpha
+            for i in range(oS.m): # Traverse all data
+                alphaPairsChanged += innerL(i, oS)
+                print("fullSet, iter: %d i:%d, pairs changed %d" % (iter, i, alphaPairsChanged)) 
+                # Display the number of iterations, which row of feature data caused alpha to change, and how many times alpha has changed this time
             iter += 1
         else:
             nonBoundIs = nonzero((oS.alphas.A > 0) * (oS.alphas.A < C))[0]
-            for i in nonBoundIs: #遍历非边界的数据
-                alphaPairsChanged += innerL(i,oS)
-                print("non-bound, iter: %d i:%d, pairs changed %d" % (iter,i,alphaPairsChanged))
+            for i in nonBoundIs: # Traverse non-boundary data
+                alphaPairsChanged += innerL(i, oS)
+                print("non-bound, iter: %d i:%d, pairs changed %d" % (iter, i, alphaPairsChanged))
             iter += 1
         if entireSet:
             entireSet = False
         elif (alphaPairsChanged == 0):
             entireSet = True
         print("iteration number: %d" % iter)
-    return oS.b,oS.alphas
+    return oS.b, oS.alphas
 
-def testRbf(data_train,data_test):
-    dataArr,labelArr = loadDataSet(data_train) #读取训练数据
-    b,alphas = smoP(dataArr, labelArr, 200, 0.0001, 10000, ('rbf', 1.3)) #通过SMO算法得到b和alpha
-    datMat=mat(dataArr)
+def testRbf(data_train, data_test):
+    """
+    Test the performance of the SVM model using the RBF kernel.
+
+    Args:
+        data_train (str): The file path of the training data.
+        data_test (str): The file path of the test data.
+
+    Returns:
+        None
+    """
+    dataArr, labelArr = loadDataSet(data_train)  # Read the training data
+    b, alphas = smoP(dataArr, labelArr, 200, 0.0001, 10000, ('rbf', 1.3))  # Get b and alphas using SMO algorithm
+    datMat = mat(dataArr)
     labelMat = mat(labelArr).transpose()
-    svInd=nonzero(alphas)[0]  #选取不为0数据的行数（也就是支持向量）
-    sVs=datMat[svInd] #支持向量的特征数据
-    labelSV = labelMat[svInd] #支持向量的类别（1或-1）
-    print("There are %d Support Vectors" % shape(sVs)[0]) #打印出共有多少的支持向量
-    
-    m,n = shape(datMat) #训练数据的行列数
+    svInd = nonzero(alphas)[0]  # Select the indices of non-zero alphas (support vectors)
+    sVs = datMat[svInd]  # Features of the support vectors
+    labelSV = labelMat[svInd]  # Class labels of the support vectors (1 or -1)
+    print("There are %d Support Vectors" % shape(sVs)[0])  # Print the number of support vectors
+
+    m, n = shape(datMat)  # Number of rows and columns in the training data
     errorCount = 0
     for i in range(m):
-        kernelEval = kernelTrans(sVs,datMat[i,:],('rbf', 1.3)) #将支持向量转化为核函数
-        predict=kernelEval.T * multiply(labelSV,alphas[svInd]) + b  
-        #这一行的预测结果，注意最后确定的分离平面只有那些支持向量决定。
-        if sign(predict)!=sign(labelArr[i]): #sign函数 -1 if x < 0, 0 if x==0, 1 if x > 0
+        kernelEval = kernelTrans(sVs, datMat[i, :], ('rbf', 1.3))  # Convert the support vectors to kernel function
+        predict = kernelEval.T * multiply(labelSV, alphas[svInd]) + b
+        # The prediction result for this line, note that the final separation plane is determined by the support vectors only.
+        if sign(predict) != sign(labelArr[i]):  # sign function: -1 if x < 0, 0 if x == 0, 1 if x > 0
             errorCount += 1
-    print("The Training Error Rate is: %2.2f %%" % (100*float(errorCount)/m)) #打印出错误率
-    
-    dataArr_test,labelArr_test = loadDataSet(data_test) #读取测试数据
-    errorCount_test = 0
-    datMat_test=mat(dataArr_test)
-    labelMat = mat(labelArr_test).transpose()
-    m,n = shape(datMat_test)
-    for i in range(m): #在测试数据上检验错误率
-        kernelEval = kernelTrans(sVs,datMat_test[i,:],('rbf', 1.3))
-        predict=kernelEval.T * multiply(labelSV,alphas[svInd]) + b
-        if sign(predict)!=sign(labelArr_test[i]):
-            errorCount_test += 1
-    print("The Test Error Rate is: %2.2f %%" % (100*float(errorCount_test)/m))
+    print("The Training Error Rate is: %2.2f %%" % (100 * float(errorCount) / m))  # Print the error rate
 
-def testlin(data_train,data_test):
-    dataArr,labelArr = loadDataSet(data_train) #读取训练数据
-    b,alphas = smoP(dataArr, labelArr, 200, 0.0001, 10000, ('lin', 1.3)) #通过SMO算法得到b和alpha
-    datMat=mat(dataArr)
+    dataArr_test, labelArr_test = loadDataSet(data_test)  # Read the test data
+    errorCount_test = 0
+    datMat_test = mat(dataArr_test)
+    labelMat = mat(labelArr_test).transpose()
+    m, n = shape(datMat_test)
+    for i in range(m):  # Check the error rate on the test data
+        kernelEval = kernelTrans(sVs, datMat_test[i, :], ('rbf', 1.3))
+        predict = kernelEval.T * multiply(labelSV, alphas[svInd]) + b
+        if sign(predict) != sign(labelArr_test[i]):
+            errorCount_test += 1
+    print("The Test Error Rate is: %2.2f %%" % (100 * float(errorCount_test) / m))
+
+def testlin(data_train, data_test):
+    """
+    Test the linear SVM model using the given training and testing data.
+
+    Parameters:
+    - data_train: The file path of the training data.
+    - data_test: The file path of the testing data.
+
+    Returns: None
+    """
+    dataArr, labelArr = loadDataSet(data_train) # Read the training data
+    b, alphas = smoP(dataArr, labelArr, 200, 0.0001, 10000, ('lin', 1.3)) # Get b and alphas using SMO algorithm
+    datMat = mat(dataArr)
     labelMat = mat(labelArr).transpose()
-    svInd=nonzero(alphas)[0]  #选取不为0数据的行数（也就是支持向量）
-    sVs=datMat[svInd] #支持向量的特征数据
-    labelSV = labelMat[svInd] #支持向量的类别（1或-1）
-    print("There are %d Support Vectors" % shape(sVs)[0]) #打印出共有多少的支持向量
+    svInd = nonzero(alphas)[0]  # Select the indices of non-zero alphas (support vectors)
+    sVs = datMat[svInd]  # Features of the support vectors
+    labelSV = labelMat[svInd]  # Class labels of the support vectors (1 or -1)
+    print("There are %d Support Vectors" % shape(sVs)[0])  # Print the number of support vectors
     
-    m,n = shape(datMat) #训练数据的行列数
+    m, n = shape(datMat)  # Number of rows and columns in the training data
     errorCount = 0
     for i in range(m):
-        kernelEval = kernelTrans(sVs,datMat[i,:],('lin', 1.3)) #将支持向量转化为核函数
-        predict=kernelEval.T * multiply(labelSV,alphas[svInd]) + b  
-        #这一行的预测结果，注意最后确定的分离平面只有那些支持向量决定。
-        if sign(predict)!=sign(labelArr[i]): #sign函数 -1 if x < 0, 0 if x==0, 1 if x > 0
+        kernelEval = kernelTrans(sVs, datMat[i, :], ('lin', 1.3))  # Convert the support vectors to kernel function
+        predict = kernelEval.T * multiply(labelSV, alphas[svInd]) + b
+        # The prediction result for this line, note that the final separation plane is determined by the support vectors only.
+        if sign(predict) != sign(labelArr[i]):  # sign function: -1 if x < 0, 0 if x == 0, 1 if x > 0
             errorCount += 1
-    print("The Training Error Rate is: %2.2f %%" % (100*float(errorCount)/m)) #打印出错误率
+    print("The Training Error Rate is: %2.2f %%" % (100 * float(errorCount) / m))  # Print the error rate
     
-    dataArr_test,labelArr_test = loadDataSet(data_test) #读取测试数据
+    dataArr_test, labelArr_test = loadDataSet(data_test)  # Read the test data
     errorCount_test = 0
-    datMat_test=mat(dataArr_test)
+    datMat_test = mat(dataArr_test)
     labelMat = mat(labelArr_test).transpose()
-    m,n = shape(datMat_test)
-    for i in range(m): #在测试数据上检验错误率
-        kernelEval = kernelTrans(sVs,datMat_test[i,:],('rbf', 1.3))
-        predict=kernelEval.T * multiply(labelSV,alphas[svInd]) + b
-        if sign(predict)!=sign(labelArr_test[i]):
+    m, n = shape(datMat_test)
+    for i in range(m):  # Check the error rate on the test data
+        kernelEval = kernelTrans(sVs, datMat_test[i, :], ('rbf', 1.3))
+        predict = kernelEval.T * multiply(labelSV, alphas[svInd]) + b
+        if sign(predict) != sign(labelArr_test[i]):
             errorCount_test += 1
-    print("The Test Error Rate is: %2.2f %%" % (100*float(errorCount_test)/m))
+    print("The Test Error Rate is: %2.2f %%" % (100 * float(errorCount_test) / m))
 
-#主程序
+# Main function
 def main():
     filename_traindata='train.txt'
     filename_testdata='test.txt'
